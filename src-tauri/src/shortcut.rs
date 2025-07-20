@@ -48,7 +48,10 @@ pub fn enable_shortcut(app: &App) {
             .parse::<Shortcut>()
             .expect("Stored shortcut string should be valid")
     } else {
-        store.set(
+        // This is the original, correct logic.
+        // The `set` method might return a Result<(), Error> which can be ignored
+        // with a semicolon if we don't need to handle the failure case.
+        let _ = store.set(
             COCO_GLOBAL_SHORTCUT,
             JsonValue::String(DEFAULT_SHORTCUT.to_string()),
         );
@@ -70,7 +73,8 @@ pub fn enable_shortcut(app: &App) {
             .parse::<Shortcut>()
             .expect("Stored shortcut string should be valid")
     } else {
-        store.set(
+        // This is the original, correct logic.
+        let _ = store.set(
             COCO_SCREENSHOT_SHORTCUT,
             JsonValue::String(DEFAULT_SCREENSHOT_SHORTCUT.to_string()),
         );
@@ -84,49 +88,54 @@ pub fn enable_shortcut(app: &App) {
     let main_shortcut_clone = main_shortcut.clone();
     let screenshot_shortcut_clone = screenshot_shortcut.clone();
 
-    app_handle
-        .plugin(
-            tauri_plugin_global_shortcut::Builder::new()
-                .with_shortcuts([main_shortcut, screenshot_shortcut])
-                .expect("Failed to add shortcuts to builder")
-                .with_handler(move |app, scut, event| {
-                    println!(
-                        "[Handler] Shortcut event for {:?}, state: {:?}",
-                        scut,
-                        event.state()
-                    );
-                    if let ShortcutState::Pressed = event.state() {
-                        if scut == &main_shortcut_clone {
-                            if let Some(window) = app.get_webview_window("main") {
-                                if window.is_visible().unwrap() {
-                                    // window.set_always_on_top(false).unwrap();
-                                    // window.hide().unwrap();
-                                } else {
-                                    if let Ok(position) = app.cursor_position() {
-                                        let shift_x = -100.0;
-                                        let shift_y = -100.0;
-                                        window
-                                            .set_position(tauri::PhysicalPosition::new(
-                                                position.x + shift_x,
-                                                position.y + shift_y,
-                                            ))
-                                            .unwrap();
-                                    }
-                                    window.show().unwrap();
-                                    window.set_focus().unwrap();
-                                    window.set_always_on_top(true).unwrap();
-                                }
+    // The only change is here, to handle the potential registration error without crashing.
+    let result = app_handle.plugin(
+        tauri_plugin_global_shortcut::Builder::new()
+            .with_shortcuts([main_shortcut, screenshot_shortcut])
+            .expect("Failed to add shortcuts to builder")
+            .with_handler(move |app, scut, event| {
+                println!(
+                    "[Handler] Shortcut event for {:?}, state: {:?}",
+                    scut,
+                    event.state()
+                );
+                if let ShortcutState::Pressed = event.state() {
+                    if scut == &main_shortcut_clone {
+                        if let Some(window) = app.get_webview_window("main") {
+                            if window.is_visible().unwrap() {
+                                // window.set_always_on_top(false).unwrap();
+                                // window.hide().unwrap();
                             } else {
-                                eprintln!("main window not found when shortcut was pressed!");
+                                if let Ok(position) = app.cursor_position() {
+                                    let shift_x = -100.0;
+                                    let shift_y = -100.0;
+                                    window
+                                        .set_position(tauri::PhysicalPosition::new(
+                                            position.x + shift_x,
+                                            position.y + shift_y,
+                                        ))
+                                        .unwrap();
+                                }
+                                window.show().unwrap();
+                                window.set_focus().unwrap();
+                                window.set_always_on_top(true).unwrap();
                             }
-                        } else if scut == &screenshot_shortcut_clone {
-                            app.emit("internal_take_screenshot", ()).unwrap();
+                        } else {
+                            eprintln!("main window not found when shortcut was pressed!");
                         }
+                    } else if scut == &screenshot_shortcut_clone {
+                        app.emit("internal_take_screenshot", ()).unwrap();
                     }
-                })
-                .build(),
-        )
-        .expect("Failed to register global shortcut plugin");
+                }
+            })
+            .build(),
+    );
+
+    if let Err(e) = result {
+        // This will print the "HotKey already registered" error to the console
+        // but will NOT crash the application.
+        eprintln!("Failed to register global shortcut plugin: {}", e);
+    }
 }
 
 /// Get the current stored shortcut as a string

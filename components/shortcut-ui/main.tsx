@@ -52,7 +52,7 @@ const TitleComponent = ({ title }: { title: string }) => {
         className="h-fit w-full text-md font-bold text-primary truncate break-words my-2 mx-4 max-w-full"
         data-tauri-drag-region
       >
-        {title}
+        {truncateText(title, 30)}
       </h3>
       {showMore && (
         <p className="absolute top-full left-4 z-50 bg-popover text-popover-foreground px-2 py-1 rounded text-xs border shadow-md text-wrap">
